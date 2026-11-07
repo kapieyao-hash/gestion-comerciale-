@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Customer } from '../../types/database.types';
 import { CustomerFormModal } from './CustomerFormModal';
 import { EmptyState } from '../layout/EmptyState';
-import { formatDate } from '../../lib/formatters';
+import { formatCurrency, formatDate } from '../../lib/formatters';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import {
   Users,
   UserPlus,
@@ -21,6 +22,7 @@ interface CustomerManagementProps {
   onAddCustomer: (data: Omit<Customer, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   onUpdateCustomer: (id: string, data: Omit<Customer, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   onDeleteCustomer: (id: string) => Promise<void>;
+  onDebtPaymentRecorded?: () => void;
 }
 
 export const CustomerManagement: React.FC<CustomerManagementProps> = ({
@@ -28,6 +30,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({
   onAddCustomer,
   onUpdateCustomer,
   onDeleteCustomer,
+  onDebtPaymentRecorded,
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -38,6 +41,26 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({
 
   // Recherche
   const [searchQuery, setSearchQuery] = useState('');
+  const [debtsByCustomerId, setDebtsByCustomerId] = useState<Record<string, number>>({});
+  const [payingCustomer, setPayingCustomer] = useState<Customer | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
+
+  const loadCustomerDebts = async () => {
+    if (!isSupabaseConfigured) return;
+
+    const { data } = await supabase.from('customer_debts').select('customer_id, name, debt');
+    const next: Record<string, number> = {};
+    (data || []).forEach((row) => {
+      if (row.customer_id) next[row.customer_id] = Number(row.debt) || 0;
+    });
+    setDebtsByCustomerId(next);
+  };
+
+  useEffect(() => {
+    loadCustomerDebts();
+  }, []);
 
   // Filtrage réel des clients (aucun client fictif)
   const filteredCustomers = useMemo(() => {
@@ -65,6 +88,89 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({
       await onUpdateCustomer(editingCustomer.id, data);
     } else {
       await onAddCustomer(data);
+    }
+  };
+
+  const findOldestUnpaidSaleId = async (customerId: string): Promise<string | null> => {
+    const { data: clientSales, error: salesErr } = await supabase
+      .from('sales')
+      .select('id, total_amount, created_at')
+      .eq('customer_id', customerId)
+      .order('created_at', { ascending: true });
+
+    if (salesErr) throw new Error(salesErr.message);
+    if (!clientSales || clientSales.length === 0) return null;
+
+    const saleIds = clientSales.map((sale) => sale.id);
+    const { data: salePayments, error: payErr } = await supabase
+      .from('payments')
+      .select('sale_id, amount')
+      .in('sale_id', saleIds);
+
+    if (payErr) throw new Error(payErr.message);
+
+    const paidBySale: Record<string, number> = {};
+    (salePayments || []).forEach((payment) => {
+      if (!payment.sale_id) return;
+      paidBySale[payment.sale_id] = (paidBySale[payment.sale_id] || 0) + Number(payment.amount);
+    });
+
+    const unpaid = clientSales.find((sale) => {
+      const paid = paidBySale[sale.id] || 0;
+      return paid < Number(sale.total_amount);
+    });
+
+    return unpaid?.id || null;
+  };
+
+  const openPaymentForm = (customer: Customer) => {
+    setPayingCustomer(customer);
+    setPaymentAmount('');
+    setPaymentError(null);
+  };
+
+  const handleRecordDebtPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payingCustomer) return;
+
+    setPaymentError(null);
+    const debt = debtsByCustomerId[payingCustomer.id] || 0;
+    const amount = Number(paymentAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPaymentError('Saisissez un montant valide.');
+      return;
+    }
+
+    if (amount > debt) {
+      setPaymentError(`Le montant ne peut pas dépasser la dette (${formatCurrency(debt, 'FCFA')}).`);
+      return;
+    }
+
+    try {
+      setIsPaying(true);
+      const saleId = await findOldestUnpaidSaleId(payingCustomer.id);
+      if (!saleId) {
+        setPaymentError('Aucune vente impayée trouvée pour ce client.');
+        return;
+      }
+
+      const { error } = await supabase.from('payments').insert([{
+        customer_id: payingCustomer.id,
+        amount,
+        sale_id: saleId,
+      }]);
+
+      if (error) throw new Error(error.message);
+
+      await loadCustomerDebts();
+      onDebtPaymentRecorded?.();
+      setPayingCustomer(null);
+      setPaymentAmount('');
+    } catch (err) {
+      setPaymentError(err instanceof Error ? err.message : 'Impossible d’enregistrer le paiement.');
+    } finally {
+      setIsPaying(false);
     }
   };
 
@@ -147,6 +253,7 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredCustomers.map((customer) => {
             const cleanPhone = customer.phone ? customer.phone.replace(/[^0-9+]/g, '') : null;
+            const debt = debtsByCustomerId[customer.id] || 0;
             return (
               <div
                 key={customer.id}
@@ -238,18 +345,87 @@ export const CustomerManagement: React.FC<CustomerManagementProps> = ({
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-400">Statut : Client actif</span>
-                  <button
-                    onClick={() => handleOpenEdit(customer)}
-                    className="text-emerald-700 font-semibold hover:underline"
-                  >
-                    Mettre à jour
-                  </button>
+                <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Dette</span>
+                    <span className={`font-bold ${debt > 0 ? 'text-amber-600' : 'text-slate-500'}`}>
+                      {formatCurrency(debt, 'FCFA')}
+                    </span>
+                  </div>
+                  {debt > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => openPaymentForm(customer)}
+                      className="w-full py-2 rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold hover:bg-emerald-100 cursor-pointer"
+                    >
+                      Enregistrer un paiement
+                    </button>
+                  )}
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400">Statut : Client actif</span>
+                    <button
+                      onClick={() => handleOpenEdit(customer)}
+                      className="text-emerald-700 font-semibold hover:underline"
+                    >
+                      Mettre à jour
+                    </button>
+                  </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {payingCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden border border-slate-200 p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="text-center">
+              <h3 className="text-base font-bold text-slate-900">
+                Enregistrer un paiement
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Dette de « {payingCustomer.name} » : {formatCurrency(debtsByCustomerId[payingCustomer.id] || 0, 'FCFA')}
+              </p>
+            </div>
+            <form onSubmit={handleRecordDebtPayment} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1" htmlFor="debt-payment-amount">
+                  Montant
+                </label>
+                <input
+                  id="debt-payment-amount"
+                  type="number"
+                  min="0"
+                  step="any"
+                  required
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 text-slate-900 text-sm"
+                />
+              </div>
+              {paymentError && (
+                <p className="text-xs font-medium text-rose-600">{paymentError}</p>
+              )}
+              <div className="flex items-center justify-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPayingCustomer(null)}
+                  disabled={isPaying}
+                  className="w-full py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 text-sm font-medium transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPaying}
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-xs transition-colors"
+                >
+                  {isPaying ? 'Enregistrement...' : 'Valider'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

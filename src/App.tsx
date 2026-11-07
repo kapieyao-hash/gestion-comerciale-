@@ -66,6 +66,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login');
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
 
   // Sauvegardes locales automatiques
   useEffect(() => {
@@ -641,6 +642,7 @@ export default function App() {
             currency={currency}
             onNavigateTab={(tab) => setActiveTab(tab)}
             onOpenNewSale={() => setActiveTab('sales')}
+            refreshKey={dashboardRefreshKey}
           />
         ) : activeTab === 'products' ? (
           <ProductManagement
@@ -657,6 +659,7 @@ export default function App() {
             onAddCustomer={handleAddCustomer}
             onUpdateCustomer={handleUpdateCustomer}
             onDeleteCustomer={handleDeleteCustomer}
+            onDebtPaymentRecorded={() => setDashboardRefreshKey((key) => key + 1)}
           />
         ) : activeTab === 'sales' ? (
           <SalesManagement

@@ -27,6 +27,7 @@ interface DashboardProps {
   currency?: string;
   onNavigateTab: (tab: 'products' | 'customers' | 'sales' | 'payments') => void;
   onOpenNewSale?: () => void;
+  refreshKey?: number;
 }
 
 type DashboardStatsRow = {
@@ -52,6 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   currency = 'FCFA',
   onNavigateTab,
   onOpenNewSale,
+  refreshKey = 0,
 }) => {
   const [dashboardStats, setDashboardStats] = useState<DashboardStatsRow>(EMPTY_DASHBOARD_STATS);
 
@@ -72,7 +74,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     };
 
     loadDashboardStats();
-  }, []);
+  }, [refreshKey]);
 
   // Calculs stricts basés sur les données réelles (AUCUNE DONNÉE FICTIVE)
   const stats = useMemo(() => {

@@ -9,7 +9,7 @@ import { Session } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { SignupScreen } from './components/auth/SignupScreen';
-import { Store, ShieldCheck, Database, Info, Package, Users, ShoppingCart, LayoutDashboard, History, LogOut } from 'lucide-react';
+import { Store, Info, Package, Users, ShoppingCart, LayoutDashboard, History, LogOut } from 'lucide-react';
 
 const PRODUCTS_STORAGE_KEY = 'commercial_app_products_v1';
 const CUSTOMERS_STORAGE_KEY = 'commercial_app_customers_v1';
@@ -66,14 +66,6 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [authScreen, setAuthScreen] = useState<'login' | 'signup'>('login');
-  const [productName, setProductName] = useState('');
-  const [productPrice, setProductPrice] = useState('');
-  const [productStock, setProductStock] = useState('');
-  const [productFormError, setProductFormError] = useState<string | null>(null);
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerAddress, setCustomerAddress] = useState('');
-  const [customerFormError, setCustomerFormError] = useState<string | null>(null);
 
   // Sauvegardes locales automatiques
   useEffect(() => {
@@ -170,9 +162,9 @@ export default function App() {
         .from('products')
         .insert([{
           name: data.name,
-          description: data.description,
           price: data.price,
           stock_quantity: data.stock_quantity,
+          description: data.description,
           min_stock_alert: data.min_stock_alert,
         }])
         .select()
@@ -186,45 +178,16 @@ export default function App() {
     showNotification(`Le produit « ${newProduct.name} » a été ajouté au stock.`);
   };
 
-  const handleQuickAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProductFormError(null);
-
-    const name = productName.trim();
-    const price = Number(productPrice);
-    const stock = Number(productStock);
-
-    if (!name || Number.isNaN(price) || Number.isNaN(stock)) {
-      setProductFormError('Renseignez un nom, un prix et un stock valides.');
-      return;
-    }
-
-    try {
-      await handleAddProduct({
-        name,
-        price,
-        stock_quantity: stock,
-        min_stock_alert: 5,
-      });
-      setProductName('');
-      setProductPrice('');
-      setProductStock('');
-    } catch (err) {
-      setProductFormError(err instanceof Error ? err.message : 'Impossible d’ajouter le produit.');
-    }
-  };
-
   const handleUpdateProduct = async (id: string, data: Omit<Product, 'id' | 'created_at' | 'updated_at'>) => {
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase
         .from('products')
         .update({
           name: data.name,
-          description: data.description,
           price: data.price,
           stock_quantity: data.stock_quantity,
+          description: data.description,
           min_stock_alert: data.min_stock_alert,
-          updated_at: new Date().toISOString(),
         })
         .eq('id', id);
 
@@ -286,42 +249,6 @@ export default function App() {
     showNotification(`Le client « ${newCustomer.name} » a été enregistré.`);
   };
 
-  const handleQuickAddCustomer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCustomerFormError(null);
-
-    const name = customerName.trim();
-    const phone = customerPhone.trim();
-    const address = customerAddress.trim();
-
-    if (!name) {
-      setCustomerFormError('Renseignez un nom.');
-      return;
-    }
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const { data: inserted, error } = await supabase
-          .from('customers')
-          .insert([{ name, phone, address }])
-          .select()
-          .single();
-
-        if (error) throw new Error(error.message);
-
-        setCustomers((prev) => [inserted as Customer, ...prev]);
-        showNotification(`Le client « ${name} » a été enregistré.`);
-      } else {
-        await handleAddCustomer({ name, phone, address });
-      }
-      setCustomerName('');
-      setCustomerPhone('');
-      setCustomerAddress('');
-    } catch (err) {
-      setCustomerFormError(err instanceof Error ? err.message : 'Impossible d’ajouter le client.');
-    }
-  };
-
   const handleUpdateCustomer = async (id: string, data: Omit<Customer, 'id' | 'created_at' | 'updated_at'>) => {
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase
@@ -331,7 +258,6 @@ export default function App() {
           phone: data.phone,
           address: data.address,
           notes: data.notes,
-          updated_at: new Date().toISOString(),
         })
         .eq('id', id);
 
@@ -659,20 +585,6 @@ export default function App() {
               </button>
             </nav>
 
-            <div className="hidden sm:block">
-              {isSupabaseConfigured ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Database className="w-3 h-3 text-emerald-600" />
-                  Supabase
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                  <ShieldCheck className="w-3 h-3 text-slate-500" />
-                  Local
-                </span>
-              )}
-            </div>
-
             {isSupabaseConfigured && session && (
               <button
                 type="button"
@@ -696,9 +608,6 @@ export default function App() {
               <strong>Base réelle :</strong> Aucune donnée fictive. Vos ventes et stocks débutent vides et sont calculés d'après vos encaissements effectifs.
             </span>
           </div>
-          <span className="hidden sm:inline font-mono text-[10px] bg-emerald-900/80 px-2 py-0.5 rounded text-emerald-300">
-            Devise : {currency}
-          </span>
         </div>
       </div>
 
@@ -734,133 +643,21 @@ export default function App() {
             onOpenNewSale={() => setActiveTab('sales')}
           />
         ) : activeTab === 'products' ? (
-          <div className="space-y-6">
-            <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5">
-              <h2 className="text-sm font-black text-slate-900 mb-3">Ajouter un produit</h2>
-              <form onSubmit={handleQuickAddProduct} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <input
-                  type="text"
-                  placeholder="Nom"
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  placeholder="Prix"
-                  value={productPrice}
-                  onChange={(e) => setProductPrice(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="Stock"
-                  value={productStock}
-                  onChange={(e) => setProductStock(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-emerald-600 text-white text-sm font-bold py-2 hover:bg-emerald-700 cursor-pointer"
-                >
-                  Ajouter
-                </button>
-              </form>
-              {productFormError && (
-                <p className="mt-2 text-xs font-medium text-rose-600">{productFormError}</p>
-              )}
-
-              <h3 className="text-sm font-black text-slate-900 mt-5 mb-2">Liste des produits</h3>
-              {products.length === 0 ? (
-                <p className="text-sm text-slate-500">Aucun produit pour le moment.</p>
-              ) : (
-                <ul className="divide-y divide-slate-100 border border-slate-100 rounded-xl">
-                  {products.map((product) => (
-                    <li key={product.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                      <span className="font-semibold text-slate-800">{product.name}</span>
-                      <span className="text-slate-500">
-                        {product.price} {currency} · stock {product.stock_quantity}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <ProductManagement
-              products={products}
-              onAddProduct={handleAddProduct}
-              onUpdateProduct={handleUpdateProduct}
-              onDeleteProduct={handleDeleteProduct}
-              currency={currency}
-              onNotification={(msg) => showNotification(msg)}
-            />
-          </div>
+          <ProductManagement
+            products={products}
+            onAddProduct={handleAddProduct}
+            onUpdateProduct={handleUpdateProduct}
+            onDeleteProduct={handleDeleteProduct}
+            currency={currency}
+            onNotification={(msg) => showNotification(msg)}
+          />
         ) : activeTab === 'customers' ? (
-          <div className="space-y-6">
-            <section className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5">
-              <h2 className="text-sm font-black text-slate-900 mb-3">Ajouter un client</h2>
-              <form onSubmit={handleQuickAddCustomer} className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <input
-                  type="text"
-                  placeholder="Nom"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                />
-                <input
-                  type="tel"
-                  placeholder="Téléphone"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                />
-                <input
-                  type="text"
-                  placeholder="Adresse"
-                  value={customerAddress}
-                  onChange={(e) => setCustomerAddress(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500"
-                />
-                <button
-                  type="submit"
-                  className="rounded-lg bg-emerald-600 text-white text-sm font-bold py-2 hover:bg-emerald-700 cursor-pointer"
-                >
-                  Ajouter
-                </button>
-              </form>
-              {customerFormError && (
-                <p className="mt-2 text-xs font-medium text-rose-600">{customerFormError}</p>
-              )}
-
-              <h3 className="text-sm font-black text-slate-900 mt-5 mb-2">Liste des clients</h3>
-              {customers.length === 0 ? (
-                <p className="text-sm text-slate-500">Aucun client pour le moment.</p>
-              ) : (
-                <ul className="divide-y divide-slate-100 border border-slate-100 rounded-xl">
-                  {customers.map((customer) => (
-                    <li key={customer.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                      <span className="font-semibold text-slate-800">{customer.name}</span>
-                      <span className="text-slate-500">
-                        {customer.phone || '—'} · {customer.address || '—'}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            <CustomerManagement
-              customers={customers}
-              onAddCustomer={handleAddCustomer}
-              onUpdateCustomer={handleUpdateCustomer}
-              onDeleteCustomer={handleDeleteCustomer}
-            />
-          </div>
+          <CustomerManagement
+            customers={customers}
+            onAddCustomer={handleAddCustomer}
+            onUpdateCustomer={handleUpdateCustomer}
+            onDeleteCustomer={handleDeleteCustomer}
+          />
         ) : activeTab === 'sales' ? (
           <SalesManagement
             sales={sales}

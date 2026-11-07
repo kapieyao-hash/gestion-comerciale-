@@ -14,8 +14,7 @@ import {
   AlertTriangle,
   Boxes,
   CheckCircle2,
-  Filter,
-  Mail
+  Filter
 } from 'lucide-react';
 
 interface ProductManagementProps {
@@ -135,15 +134,6 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            onClick={() => setIsEmailModalOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-semibold text-xs sm:text-sm shadow-2xs transition-all cursor-pointer"
-            title="Configurer les alertes de stock faible par e-mail avec EmailJS"
-          >
-            <Mail className="w-4 h-4 text-blue-600" />
-            <span className="hidden sm:inline">Alertes E-mail</span>
-          </button>
-
           <button
             onClick={handleOpenAdd}
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-sm shadow-xs hover:shadow-md transition-all cursor-pointer"

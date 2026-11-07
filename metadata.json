@@ -1,0 +1,6 @@
+{
+  "name": "Gestion Commerciale Vendeur",
+  "description": "Application simple de gestion commerciale pour petits commerçants et entrepreneurs : gestion des stocks, clients, ventes, dettes et encaissements.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

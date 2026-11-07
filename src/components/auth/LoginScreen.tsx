@@ -26,7 +26,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onGoToSignup }) => {
     setIsSubmitting(false);
 
     if (signInError) {
-      setError(translateAuthError(signInError.message));
+      const msg = signInError.message.toLowerCase();
+      if (msg.includes('email not confirmed')) {
+        setError("Confirme d'abord ton email");
+      } else if (msg.includes('invalid login credentials')) {
+        setError('Email ou mot de passe incorrect');
+      } else {
+        setError(translateAuthError(signInError.message));
+      }
     }
   };
 
@@ -80,9 +87,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onGoToSignup }) => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-lg bg-emerald-600 text-white text-sm font-bold py-2.5 hover:bg-emerald-700 disabled:opacity-60 cursor-pointer"
+            className="w-full rounded-lg text-sm font-bold cursor-pointer disabled:opacity-80"
+            style={{
+              backgroundColor: '#0f172a',
+              color: '#ffffff',
+              minHeight: 48,
+              width: '100%',
+              WebkitAppearance: 'none',
+              appearance: 'none',
+              colorScheme: 'light',
+            }}
           >
-            {isSubmitting ? 'Connexion...' : 'Se connecter'}
+            Se connecter
           </button>
         </form>
 
